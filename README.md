@@ -186,6 +186,7 @@ Column layout:
 | 12 | `SIM_DLMAG + SIM_MUSHIFT + TEMPLATE_M0` |
 | 13 | `−SIM_alpha` |
 | 14 | `SIM_beta` |
+| 15 | `log(M_stellar)` — host-galaxy log-mass (randomly sampled for this work) |
 
 ---
 
