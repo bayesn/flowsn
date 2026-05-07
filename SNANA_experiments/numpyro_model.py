@@ -74,11 +74,6 @@ def numpyro_model(
                 # Pass the physical H0 to get distance in physical Mpc
                 d_physical = wcosmo.FlatwCDM(h*100, Om0, w).comoving_distance(z)
             else:
-                # jax-cosmo ALWAYS returns Mpc/h regardless of the 'h' you pass
-                cosmo_jax = Cosmology(
-                    Omega_c=Om0, h=h, w0=w, wa=wa,
-                    Omega_b=0, n_s=0.96, sigma8=0.8, Omega_k=0.0, 
-                )
                 d_mpc_h = background.transverse_comoving_distance(cosmo_jax, 1 / (1 + z))
                 # CONVERT: Mpc/h -> physical Mpc by dividing by h
                 d_physical = d_mpc_h / h

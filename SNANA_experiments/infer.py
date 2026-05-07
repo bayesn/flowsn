@@ -106,7 +106,6 @@ def main():
     out_dir  = str(SNANA_DIR / f"SNANA_chains_{run_name}")
     os.makedirs(out_dir, exist_ok=True)
 
-    save_labels = ["w", "Om0", "M0", "alpha", "beta"] if WCDM_BOOL else ["Om0", "Omde", "M0", "alpha", "beta"]
     prefix      = "wflow" if WCDM_BOOL else "lflow"
 
 
@@ -150,6 +149,8 @@ def main():
 
     posterior = mcmc.get_samples()
     out_path  = f"{out_dir}/{prefix}_SNANA{args.rep}.npz"
+    save_labels = list(posterior.keys())
+    save_labels.pop('eps')
     np.savez(out_path, **{k: posterior[k] for k in save_labels})
     print(f"  Saved -> {out_path}\n")
 

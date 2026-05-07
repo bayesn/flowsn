@@ -133,7 +133,7 @@ def mcmc_model(
 
     if wCDM:
         Om0 = numpyro.sample("Om0", dist.Uniform(0, 1))
-        w = numpyro.sample("w", dist.Uniform(-2, 2))
+        w = numpyro.sample("w0", dist.Uniform(-2, 2))
         Omde = 1 - Om0
     else:
         Om0 = numpyro.sample("Om0", dist.Uniform(-2, 2))
@@ -207,13 +207,26 @@ def mcmc_model(
 
         return jax.vmap(mu_vpec_grad, in_axes=(0, 0, 0))(z, zpec, vhel)
 
+        # --- CMB shift parameter constraint ---
     if cmb_bool:
-        z_cmb = jnp.array(1089.0)
-        d_cmb = wcosmo.FlatwCDM(1.0, Om0, w).comoving_distance(z_cmb) / (1 + z_cmb)
-        R_value = jnp.sqrt(Om0) * (1 + z_cmb) * d_cmb / 299792.458
+
+        def R_calc():
+            z = jnp.array(1089.0)
+            if wCDM and not wa_bool:
+                # Pass the physical H0 to get distance in physical Mpc
+                d_physical = wcosmo.FlatwCDM(h*100, Om0, w).comoving_distance(z)
+            else:
+                d_mpc_h = background.transverse_comoving_distance(cosmo_jax, 1 / (1 + z))
+                # CONVERT: Mpc/h -> physical Mpc by dividing by h
+                d_physical = d_mpc_h / h
+
+            # Standard Physical Formula: R = sqrt(Om) * H0 * D_physical / c
+            return jnp.squeeze(jnp.sqrt(Om0) * h * 100 * d_physical / 299792.458)
+        
+
         numpyro.sample(
             "cmb_obs",
-            dist.Normal(jnp.array([R_value]), sigma_Rcmb),
+            dist.Normal(jnp.array([R_calc()]), sigma_Rcmb),
             obs=jnp.array([R_cmb_obs]),
         )
 
