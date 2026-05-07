@@ -1,76 +1,55 @@
 import pandas as pd
-from matplotlib import pyplot as plt
 import numpy as np
-import numpy.typing
-
+import os
+import argparse
 import copy
+from utils import TEMPLATE_M0, SNANA_KEYS
 
-# import pandas as pd
-from matplotlib import pyplot as plt
-import numpy as np
-import numpy.typing
+parser = argparse.ArgumentParser()
+parser.add_argument("--cosmo", type=int, default=1)
+args = parser.parse_args()
+cosmo = 'cosmo' + str(args.cosmo)
+print(f"Processing: {cosmo}")
 
-
-tot = 0
-max_ =0
-min_ = 1000
-lens = []
-
-best =[]# import pandas as pd
-from matplotlib import pyplot as plt
-import numpy as np
-import numpy.typing
-
-
-tot = 0
-max_ =0
-min_ = 1000
-lens = []
-
-best =[]
+# JLA cuts
 def cuts(df):
-
-    df = df[np.logical_and(df['x1']>=-3,df['x1']<=3)]
-    df = df[np.logical_and(df['c']>=-0.3,df['c']<=0.3)]
-    df = df[df['x1ERR']<1.0]
-    df = df[df['cERR']<1.0]
-    df = df[df['PKMJDERR']<2.0]
-    df = df[np.logical_and(df['FITPROB']>=0.05,df['FITPROB']<=1.0)]
-
+    df = df[np.logical_and(df['x1'] >= -3, df['x1'] <= 3)]
+    df = df[np.logical_and(df['c'] >= -0.3, df['c'] <= 0.3)]
+    df = df[df['x1ERR'] < 1.0]
+    df = df[df['cERR'] < 1.0]
+    df = df[df['PKMJDERR'] < 2.0]
+    df = df[np.logical_and(df['FITPROB'] >= 0.05, df['FITPROB'] <= 1.0)]
     return df
 
+os.makedirs('testing_sets/' + cosmo, exist_ok=True)
 
-for i in range(1):
+# Loop through files
+for i in range(100):
+    dir_ = '../../SNANA_files/test_files/' + cosmo + '/TESTING' + str(i + 1) + '.FITRES'
     
-    add_str = '0'+str(i+1) if i<9 else str(i+1)
-    add_str = '0'+add_str if i<99 else add_str
-    dir_ = 'output/PIP_SBI_PLOT_PLASTICC_SIMDATA-0'+add_str+'/FITOPT000.FITRES'
+    # Try to load file, skip if missing
+    if not os.path.exists(dir_):
+        continue
+        
+    df = cuts(pd.read_csv(dir_, comment="#", sep='\s+').sample(frac=1))
     
-    df  = cuts(pd.read_csv(dir_, comment="#", sep='\s+').sample(frac=1))
+    test_arr = np.empty((len(df), 0), dtype=np.float64)
 
-    train_arr=np.empty((len(df),0),dtype=np.float64)
-    train_arr = np.append(train_arr,np.array(df['zHEL']).reshape(-1,1),axis=1)
-    train_arr = np.append(train_arr,np.array(df['zHD']).reshape(-1,1),axis=1)
-    train_arr = np.append(train_arr,np.array(df['zHDERR']).reshape(-1,1),axis=1)
-    train_arr = np.append(train_arr,np.array(df['mB']).reshape(-1,1),axis=1)
-    train_arr = np.append(train_arr,np.array(df['c']).reshape(-1,1),axis=1)
-    train_arr = np.append(train_arr,np.array(df['x1']).reshape(-1,1),axis=1)
-    train_arr = np.append(train_arr,np.array(df['mBERR']).reshape(-1,1),axis=1)
-    train_arr = np.append(train_arr,np.array(df['cERR']).reshape(-1,1),axis=1)
-    train_arr = np.append(train_arr,np.array(df['x1ERR']).reshape(-1,1),axis=1)
-    train_arr = np.append(train_arr,np.array(-2.5/np.log(10)*df['COV_c_x0']/df['x0']).reshape(-1,1),axis=1)
-    train_arr = np.append(train_arr,np.array(-2.5/np.log(10)*df['COV_x1_x0']/df['x0']).reshape(-1,1),axis=1)
-    train_arr = np.append(train_arr,np.array(df['COV_x1_c']).reshape(-1,1),axis=1)
-    train_arr = np.append(train_arr,np.array(df['SIM_DLMAG']-19.36500000433958).reshape(-1,1),axis=1)
-    train_arr = np.append(train_arr,np.array(-df['SIM_alpha']).reshape(-1,1),axis=1)
-    train_arr = np.append(train_arr,np.array(df['SIM_beta']).reshape(-1,1),axis=1)
+    # LOOP THROUGH KEYS WITHOUT MODIFYING THE DICTIONARY
+    for key, (coeff, const) in SNANA_KEYS.items():
+        if key in ['COV_c_x0', 'COV_x1_x0']:
+            # Apply the division by x0 locally for THIS file only
+            # Math: (-2.5/log(10)) * COV_from_file / x0_from_file
+            val = (coeff * df[key] / df['x0'] + const).values.reshape(-1, 1)
+        else:
+            # Standard math for all other columns
+            val = (coeff * df[key] + const).values.reshape(-1, 1)
+            
+        test_arr = np.append(test_arr, val, axis=1)
 
-    if i == 0:
-        new_train_arr = copy.deepcopy(train_arr)
-    else:
-        new_train_arr = np.append(new_train_arr,train_arr,axis=0)
-    print(i,' ',len(new_train_arr))
+    # Sample fake masses (appended last, index -1)
+    fake_mass = np.random.uniform(8, 12, len(df)).reshape(-1, 1)
+    test_arr = np.append(test_arr, fake_mass, axis=1)
 
-np.save('test_single.npy',new_train_arr)
-    
-
+    print(f"File {i+1} | Supernovae: {len(test_arr)} | Shape: {test_arr.shape}")
+    np.save('testing_sets/' + cosmo + '/SNANA_test' + str(i) + '.npy', test_arr)
