@@ -58,7 +58,7 @@ for key, (coeff, const) in SNANA_KEYS.items():
 # 3. Stack into final array and save
 train_arr = np.hstack(train_list)
 
-save_path = BASE_DIR / 'flowsn' / 'SNANA_experiments' / 'SNANA_training_set.npy'
+save_path = Path(__file__).resolve().parent / 'SNANA_training_set.npy'
 save_path.parent.mkdir(parents=True, exist_ok=True)
 
 np.save(save_path, train_arr)

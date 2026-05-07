@@ -1,18 +1,11 @@
 #!/usr/bin/env python
 # coding: utf-8
 
-#!/usr/bin/env python
-# coding: utf-8
-
-import os
-
-current_dir = os.getcwd()
-if "simple_model" not in current_dir:
-    current_dir += "/simple_model"
 import argparse
+import os
+from pathlib import Path
+
 import numpy as np
-
-
 import jax
 import jax.numpy as jnp
 import jax.random as random
@@ -21,46 +14,42 @@ jax.config.update("jax_enable_x64", True)
 import numpyro
 
 numpyro.set_host_device_count(4)
-# ... rest of your imports (utils, models, etc.)
-import os
-import argparse
-import numpy as np
-from numpyro.infer import MCMC, NUTS, Predictive, init_to_value
+
 import equinox as eqx
 from flowjax.distributions import Normal
 from flowjax.flows import masked_autoregressive_flow
+from numpyro.infer import MCMC, NUTS, Predictive, init_to_value
 
 from utils import set_backend, sample_redshifts
 from numpyro_models import sample_model, mcmc_model
 
+MODEL_DIR = Path(__file__).resolve().parent
+
 
 def main():
     parser = argparse.ArgumentParser()
-    parser.add_argument("--rep", type=int, default=0)
-    parser.add_argument("--name", type=str, default="base_name")
-    parser.add_argument("--nn_width", type=int, default=32)
-    parser.add_argument("--nn_depth", type=int, default=2)
-    parser.add_argument("--no_flows", type=int, default=4)
-    parser.add_argument("--model_type", type=str, default="flow")
-    parser.add_argument("--cmb", action="store_true", help="CMB prior")
-    parser.add_argument("--lcdm", action="store_true", help="CMB prior")
+    parser.add_argument("--rep",        type=int,  default=0)
+    parser.add_argument("--name",       type=str,  default="base_name")
+    parser.add_argument("--nn_width",   type=int,  default=32)
+    parser.add_argument("--nn_depth",   type=int,  default=2)
+    parser.add_argument("--no_flows",   type=int,  default=4)
+    parser.add_argument("--model_type", type=str,  default="flow")
+    parser.add_argument("--cmb",   action="store_true", help="CMB shift-parameter prior")
+    parser.add_argument("--lcdm",  action="store_true", help="Flat LCDM (fit Omde instead of w)")
+    parser.add_argument("--wa",    action="store_true", help="Vary dark-energy wa parameter")
+    parser.add_argument("--gamma", type=float, default=0.0, help="True host-mass step gamma injected into simulation (0 = no mass step)")
     args = parser.parse_args()
 
     if args.model_type == "flow" and args.name == "base_name":
         raise FileNotFoundError(
-            'You need to provide the name of the weights with "--name weights_name"'
+            'Provide the model name with "--name weights_name"'
         )
-    # --- Config ---
+
     set_backend("jax")
 
-    std_norm = True
-    if args.lcdm:
-        wCDM_bool = False
-    else:
-        wCDM_bool = True
-    n_samples = 11500
+    wCDM_bool = not args.lcdm
 
-    # --- CMB Prep ---
+    # --- CMB prep ---
     vary_cmb = True
     sigma_Rcmb = 0.007
     R_cmb_obs_default = 1.7579698042257326
@@ -68,28 +57,16 @@ def main():
     if vary_cmb:
         key = random.PRNGKey(args.rep)
         key_cmb, _ = random.split(key)
-        cmb_draw = random.normal(key_cmb)
-        R_cmb_obs = R_cmb_obs_default + cmb_draw * sigma_Rcmb
+        R_cmb_obs = float(R_cmb_obs_default + random.normal(key_cmb) * sigma_Rcmb)
     else:
         R_cmb_obs = R_cmb_obs_default
 
-    cmb_kwargs = {
-        "cmb_bool": args.cmb,
-        "sigma_Rcmb": sigma_Rcmb,
-        "R_cmb_obs": R_cmb_obs,
-    }
-
-    # --- Flow Model Setup ---
+    # --- Flow model setup ---
     flow_kwargs = {}
     if args.model_type == "flow":
-        if std_norm:
-            file_ = np.load(current_dir + "/scaling/" + args.name + "_std.npz")
-            mu_, std_ = file_["mu"], file_["std"]
-            add_ = jnp.sum(jnp.log(std_[:3]))
-        else:
-            file_ = np.load(current_dir + "/scaling/" + args.name + "_minmax.npz")
-            min_, max_ = file_["min"], file_["max"]
-            add_ = jnp.sum(jnp.log(max_ - min_)[:3])
+        file_ = np.load(MODEL_DIR / "scaling" / (args.name + "_std.npz"))
+        mu_, std_ = file_["mu"], file_["std"]
+        add_ = jnp.sum(jnp.log(std_[:3]))
 
         key, _ = random.split(random.PRNGKey(2))
         skel_flow = masked_autoregressive_flow(
@@ -102,13 +79,13 @@ def main():
             nn_depth=args.nn_depth,
         )
         flow_model = eqx.tree_deserialise_leaves(
-            current_dir + "/weights/" + args.name + "_weights.eqx", skel_flow
+            str(MODEL_DIR / "weights" / (args.name + ".eqx")), skel_flow
         )
-
         flow_kwargs = {"flow_model": flow_model, "mu_": mu_, "std_": std_, "add_": add_}
 
-    # --- Data Simulation ---
+    # --- Simulate test data ---
     print(f"Running seed: {args.rep}")
+    n_samples = 11500
     rng_key = random.PRNGKey(args.rep)
     rng_key, rng_key_1 = random.split(rng_key)
     z_s_ = sample_redshifts(n_samples, rng_key_1, Om0=0.315, w0=-1, beta_rate=1.5)
@@ -119,13 +96,13 @@ def main():
 
     prior_predictive = Predictive(sample_model, num_samples=1)
     rng_key, rng_key_3 = random.split(rng_key)
-    prior_predictions = prior_predictive(rng_key_3, z_s_, z_pec)
+    prior_predictions = prior_predictive(rng_key_3, z_s_, z_pec, gamma=args.gamma)
 
     sel_sim = prior_predictions["sel_s"][0, :]
     sel_sim_mask = np.logical_and(sel_sim == 1, np.logical_and(z_s > 0.05, z_s < 1.1))
 
-    d_hat_sim = prior_predictions["d_hat_s"][0, :, :]
-    d_s = d_hat_sim[sel_sim_mask, :]
+    d_s = prior_predictions["d_hat_s"][0, :, :][sel_sim_mask, :]
+    mass_sim = np.array(prior_predictions["log_mass"][0, :][sel_sim_mask])
 
     d_err_s = jnp.array(
         [
@@ -139,9 +116,9 @@ def main():
     ).T
 
     z_s = z_s[sel_sim_mask]
-    print(f"Selected Samples: {len(z_s)}")
+    print(f"Selected samples: {len(z_s)}")
 
-    # --- MCMC Setup & Run ---
+    # --- MCMC ---
     init_dict = {
         "w": -1.1,
         "Om0": 0.35,
@@ -156,6 +133,11 @@ def main():
         "beta": 3.0,
         "alpha_c": -0.01,
     }
+    gamma_bool = args.gamma != 0.0
+    if args.wa:
+        init_dict["wa"] = 0.0
+    if gamma_bool:
+        init_dict["gamma"] = 0.0
 
     nuts_kernel = NUTS(
         mcmc_model,
@@ -165,32 +147,37 @@ def main():
     )
     mcmc = MCMC(nuts_kernel, num_samples=500, num_warmup=500, num_chains=4)
 
-    rng_key = random.PRNGKey(0)
     mcmc.run(
-        rng_key,
+        random.PRNGKey(0),
         z_s,
         data_s=d_s,
         data_err_s=d_err_s,
         wCDM=wCDM_bool,
+        wa_bool=args.wa,
+        gamma_bool=gamma_bool,
+        mass=mass_sim,
         model_type=args.model_type,
         flow_kwargs=flow_kwargs,
-        cmb_kwargs=cmb_kwargs,
+        cmb_bool=args.cmb,
+        R_cmb_obs=R_cmb_obs,
+        sigma_Rcmb=sigma_Rcmb,
     )
 
     mcmc.print_summary()
     posterior_samples = mcmc.get_samples()
 
-    # --- Save Output ---
+    # --- Save ---
+    suffix = ("_cmb" if args.cmb else "") + ("_wa" if args.wa else "") + ("_gamma" if gamma_bool else "")
     if args.model_type != "flow":
-        save_name = args.model_type + "_cmb" if args.cmb else args.model_type
+        save_name = args.model_type + suffix
     else:
-        save_name = args.name + "_cmb_flow" if args.cmb else args.name + "_flow"
+        save_name = args.name + suffix + "_flow"
 
-    dir_out = f"{current_dir}/chains/{save_name}_chains"
-    os.makedirs(dir_out, exist_ok=True)
+    dir_out = MODEL_DIR / "chains" / f"{save_name}_chains"
+    dir_out.mkdir(parents=True, exist_ok=True)
 
     prefix = "w" if wCDM_bool else "l"
-    np.savez(os.path.join(dir_out, f"{prefix}{args.rep}.npz"), **posterior_samples)
+    np.savez(dir_out / f"{prefix}{args.rep}.npz", **posterior_samples)
 
 
 if __name__ == "__main__":

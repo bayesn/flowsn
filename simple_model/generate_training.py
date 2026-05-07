@@ -8,10 +8,9 @@ import numpyro
 import numpyro.distributions as dist
 from numpyro.infer import Predictive
 import numpy as onp
-import os
-current_dir = os.getcwd()
-if 'simple_model' not in current_dir:
-    current_dir+='/simple_model'
+from pathlib import Path
+
+MODEL_DIR = Path(__file__).resolve().parent
     
 # Enable 64-bit precision
 jax.config.update("jax_enable_x64", True)
@@ -84,7 +83,9 @@ def main():
         print(f"Batch {i+1}/20 done. Total: {sum(len(b) for b in all_batches)}")
         
     # Save as one final file
-    onp.save(f"{current_dir}/training_data/{args.name}.npy", onp.concatenate(all_batches, axis=0))
+    out_dir = MODEL_DIR / "training_data"
+    out_dir.mkdir(exist_ok=True)
+    onp.save(out_dir / f"{args.name}.npy", onp.concatenate(all_batches, axis=0))
     print(f"Full dataset (20M rows) saved to {args.name}.npy")
 
 if __name__ == "__main__": 

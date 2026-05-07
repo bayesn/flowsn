@@ -40,6 +40,7 @@ def sample_model(
     sigma_cut=0.25,
     a=-0.1,
     b=-1,
+    gamma=0.0,
 ):
 
     n_sne = len(z_s)
@@ -47,10 +48,13 @@ def sample_model(
         d_s = time_jax_comoving_distance(z_s, jnp.array([Om0]), jnp.array([w]))
         mu_s = 5 * jnp.log10(d_s * (z_pec) ** 2 * (1 + z_s) * 1e6 / 10)
 
+        log_mass = numpyro.sample("log_mass", dist.Uniform(8, 12))
+        mass_mask = jnp.where(log_mass > 10, 1.0, 0.0)
+
         x_s_ = numpyro.sample("x_s", dist.Normal(x0, sigma_x))
         c_s_ = numpyro.sample("c_s", dist.Normal(c0 + alpha_c * x_s_, sigma_c))
         m_s_ = numpyro.sample(
-            "m_s_", dist.Normal(M0 + mu_s + alpha * x_s_ + beta * c_s_, sigma_res)
+            "m_s_", dist.Normal(M0 + mu_s + alpha * x_s_ + beta * c_s_ + gamma * mass_mask, sigma_res)
         )
 
         log_x_err = numpyro.sample("log_x_err_s", dist.Normal(-1.5, 0.5), obs=log_x_err)
@@ -117,9 +121,14 @@ def mcmc_model(
     sigma_pec=300,
     z_s_err=0,
     wCDM=True,
+    wa_bool=False,
+    gamma_bool=False,
+    mass=None,
     model_type="analytical",
     flow_kwargs=None,
-    cmb_kwargs=None,
+    cmb_bool=False,
+    R_cmb_obs=None,
+    sigma_Rcmb=0.007,
 ):
 
     if wCDM:
@@ -130,6 +139,11 @@ def mcmc_model(
         Om0 = numpyro.sample("Om0", dist.Uniform(-2, 2))
         Omde = numpyro.sample("Omde", dist.Uniform(-2, 2))
         w = -1
+
+    if wa_bool:
+        wa = numpyro.sample("wa", dist.Uniform(-3.0, 3.0))
+    else:
+        wa = 0.0
 
     alpha = numpyro.sample("alpha", dist.Uniform(-0.2, -0.1))
     beta = numpyro.sample("beta", dist.Uniform(2.5, 3.5))
@@ -145,6 +159,13 @@ def mcmc_model(
     sigma_c = numpyro.sample("sigma_c", dist.HalfNormal(1))
     sigma_x = numpyro.sample("sigma_x", dist.HalfNormal(2))
 
+    if gamma_bool:
+        gamma = numpyro.sample("gamma", dist.Uniform(-0.5, 0.5))
+        mass_mask = jnp.where(mass > 10, 1.0, 0.0)
+        gamma_term = gamma * mass_mask
+    else:
+        gamma_term = 0.0
+
     cosmo_jax = Cosmology(
         Omega_c=Om0,
         h=h,
@@ -153,13 +174,13 @@ def mcmc_model(
         n_s=0.96,
         sigma8=200000,
         Omega_k=1 - (Om0 + Omde),
-        wa=0,
+        wa=wa,
     )
     n_sne = len(z_s)
 
     def mu_func(z, zpec, zhel):
 
-        if wCDM:
+        if wCDM and not wa_bool:
             d__ = wcosmo.FlatwCDM(H0, Om0, w).comoving_distance(z)
             mu = 5 * jnp.log10(d__ * (1 + zpec) ** 2 * (1 + zhel) * (1 + z) * 1e6 / 10)
         else:
@@ -186,14 +207,14 @@ def mcmc_model(
 
         return jax.vmap(mu_vpec_grad, in_axes=(0, 0, 0))(z, zpec, vhel)
 
-    if cmb_kwargs and cmb_kwargs.get("cmb_bool"):
+    if cmb_bool:
         z_cmb = jnp.array(1089.0)
         d_cmb = wcosmo.FlatwCDM(1.0, Om0, w).comoving_distance(z_cmb) / (1 + z_cmb)
         R_value = jnp.sqrt(Om0) * (1 + z_cmb) * d_cmb / 299792.458
         numpyro.sample(
             "cmb_obs",
-            dist.Normal(jnp.array([R_value]), cmb_kwargs["sigma_Rcmb"]),
-            obs=jnp.array([cmb_kwargs["R_cmb_obs"]]),
+            dist.Normal(jnp.array([R_value]), sigma_Rcmb),
+            obs=jnp.array([R_cmb_obs]),
         )
 
     with numpyro.plate("plate_i", n_sne):
@@ -219,7 +240,7 @@ def mcmc_model(
             numpyro.sample(
                 "obs",
                 SkewNormalPlus3D(
-                    mu_s + M0 + eps,
+                    mu_s + M0 + gamma_term + eps,
                     jnp.repeat(c0, n_sne),
                     jnp.repeat(x0, n_sne),
                     sigma_res,
@@ -246,7 +267,7 @@ def mcmc_model(
             numpyro.sample(
                 "obs",
                 Naive(
-                    mu_s + M0 + eps,
+                    mu_s + M0 + gamma_term + eps,
                     jnp.repeat(c0, n_sne),
                     jnp.repeat(x0, n_sne),
                     sigma_res,
@@ -270,11 +291,10 @@ def mcmc_model(
                 obs=data_s,
             )
         elif model_type == "flow":
-            # This matches the signature in the new __init__ above
             numpyro.sample(
                 "obs",
                 FlowSNP3D(
-                    mu_s + M0 + eps,
+                    mu_s + M0 + gamma_term + eps,
                     jnp.repeat(c0, n_sne),
                     jnp.repeat(x0, n_sne),
                     jnp.repeat(sigma_res, n_sne),

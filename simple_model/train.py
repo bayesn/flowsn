@@ -12,10 +12,9 @@ from flowjax.distributions import Normal
 from flowjax.flows import masked_autoregressive_flow
 from flowjax.train.losses import MaximumLikelihoodLoss
 from flowjax.train.train_utils import get_batches, step, train_val_split
-import os
-current_dir = os.getcwd()
-if 'simple_model' not in current_dir:
-    current_dir+='/simple_model'
+from pathlib import Path
+
+MODEL_DIR = Path(__file__).resolve().parent
     
 # Ensure 64-bit precision for physical consistency
 jax.config.update("jax_enable_x64", True)
@@ -32,7 +31,8 @@ def main():
     args = parser.parse_args()
 
     # 1. Load Data with robust pathing
-    data_path = current_dir+'/training_data/'+ args.data if args.data.endswith('.npy') else current_dir+'/training_data/'+ args.data + '.npy'
+    data_file = args.data if args.data.endswith('.npy') else args.data + '.npy'
+    data_path = MODEL_DIR / "training_data" / data_file
     print(f"Loading {data_path}...")
     X = jnp.array(onp.load(data_path))
     
@@ -43,7 +43,8 @@ def main():
     mu = jnp.mean(X, axis=0)
     std = jnp.std(X, axis=0)
     X = (X - mu) / std
-    onp.savez(f"{current_dir}/scaling/{args.name}_std.npz", mu=onp.array(mu), std=onp.array(std))
+    (MODEL_DIR / "scaling").mkdir(exist_ok=True)
+    onp.savez(str(MODEL_DIR / "scaling" / (args.name + "_std.npz")), mu=onp.array(mu), std=onp.array(std))
     
     # Jacobian correction for physical log-likelihood
     log_jac_adj = jnp.sum(jnp.log(std[:3]))
@@ -82,7 +83,8 @@ def main():
             print(f"Epoch {epoch} | Val Loss: {val_loss:.4f}")
 
     # Final save
-    eqx.tree_serialise_leaves(f"{current_dir}/weights/{args.name}.eqx", eqx.combine(params, static))
+    (MODEL_DIR / "weights").mkdir(exist_ok=True)
+    eqx.tree_serialise_leaves(str(MODEL_DIR / "weights" / (args.name + ".eqx")), eqx.combine(params, static))
     print(f"Training complete. Model saved to {args.name}.eqx")
 
 if __name__ == "__main__":

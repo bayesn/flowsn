@@ -3,7 +3,11 @@ import numpy as np
 import os
 import argparse
 import copy
+from pathlib import Path
 from utils import TEMPLATE_M0, SNANA_KEYS
+
+SNANA_DIR = Path(__file__).resolve().parent
+SNANA_FILES_DIR = SNANA_DIR.parent.parent / 'SNANA_files'
 
 parser = argparse.ArgumentParser()
 parser.add_argument("--cosmo", type=int, default=1)
@@ -21,14 +25,14 @@ def cuts(df):
     df = df[np.logical_and(df['FITPROB'] >= 0.05, df['FITPROB'] <= 1.0)]
     return df
 
-os.makedirs('testing_sets/' + cosmo, exist_ok=True)
+(SNANA_DIR / 'testing_sets' / cosmo).mkdir(parents=True, exist_ok=True)
 
 # Loop through files
 for i in range(100):
-    dir_ = '../../SNANA_files/test_files/' + cosmo + '/TESTING' + str(i + 1) + '.FITRES'
-    
+    dir_ = SNANA_FILES_DIR / 'test_files' / cosmo / f'TESTING{i + 1}.FITRES'
+
     # Try to load file, skip if missing
-    if not os.path.exists(dir_):
+    if not dir_.exists():
         continue
         
     df = cuts(pd.read_csv(dir_, comment="#", sep='\s+').sample(frac=1))
@@ -52,4 +56,4 @@ for i in range(100):
     test_arr = np.append(test_arr, fake_mass, axis=1)
 
     print(f"File {i+1} | Supernovae: {len(test_arr)} | Shape: {test_arr.shape}")
-    np.save('testing_sets/' + cosmo + '/SNANA_test' + str(i) + '.npy', test_arr)
+    np.save(SNANA_DIR / 'testing_sets' / cosmo / f'SNANA_test{i}.npy', test_arr)

@@ -3,8 +3,11 @@
 
 import argparse
 import os
+from pathlib import Path
 
 import jax
+
+SNANA_DIR = Path(__file__).resolve().parent
 import jax.numpy as jnp
 import jax.random as jr
 import numpy as np
@@ -62,9 +65,7 @@ def find_pending_runs(directory, total=100):
 
 
 def load_test_set(rep, cosmo):
-    path = (
-        f"./testing_sets/cosmo{str(cosmo)}/SNANA_test{rep}.npy"
-    )
+    path = SNANA_DIR / "testing_sets" / f"cosmo{cosmo}" / f"SNANA_test{rep}.npy"
     X = np.load(path)
     X = X[np.logical_and(X[:, 1] > 0.05, X[:, 1] < 1.1)]
     print(f"  Loaded test set {rep}: {X.shape}")
@@ -100,7 +101,7 @@ def main():
     # --- Output directory ---
     suffix   = ("_cmb" if args.cmb else "") + ("_cosmo"+str(args.cosmo))
     run_name = args.name + suffix
-    out_dir  = f"SNANA_chains_{run_name}"
+    out_dir  = str(SNANA_DIR / f"SNANA_chains_{run_name}")
     os.makedirs(out_dir, exist_ok=True)
 
     save_labels = ["w", "Om0", "M0", "alpha", "beta"] if WCDM_BOOL else ["Om0", "Omde", "M0", "alpha", "beta"]

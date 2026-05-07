@@ -2,6 +2,9 @@ import jax
 import jax.numpy as jnp
 import jax.random as jr
 import equinox as eqx
+from pathlib import Path
+
+SNANA_DIR = Path(__file__).resolve().parent
 
 from flowjax.distributions import Normal
 from flowjax.flows import masked_autoregressive_flow
@@ -22,7 +25,7 @@ def load_flow(name, no_flows, nn_width, nn_depth):
         nn_width=nn_width,
         nn_depth=nn_depth,
     )
-    return eqx.tree_deserialise_leaves("flow_weights/" + name + ".eqx", skeleton)
+    return eqx.tree_deserialise_leaves(str(SNANA_DIR / "flow_weights" / (name + ".eqx")), skeleton)
 
 class FlowSNP3D(Distribution):
     arg_constraints = {

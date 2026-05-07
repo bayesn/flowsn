@@ -2,6 +2,9 @@ import argparse
 import pickle
 import copy
 from dataclasses import dataclass
+from pathlib import Path
+
+SNANA_DIR = Path(__file__).resolve().parent
 
 import numpy as onp
 import jax
@@ -285,7 +288,7 @@ def train(
 # =========================
 
 def save_model(params, static, name):
-    eqx.tree_serialise_leaves(f"flow_weights/{name}.eqx", eqx.combine(params, static))
+    eqx.tree_serialise_leaves(str(SNANA_DIR / "flow_weights" / f"{name}.eqx"), eqx.combine(params, static))
 
 
 
@@ -305,14 +308,16 @@ def main():
 
     # ---- Data ----
     print("\nLoading data...")
-    X_raw = load_data()
+    X_raw = load_data(path=str(SNANA_DIR / "SNANA_training_set.npy"))
     print(f"  Raw data shape: {X_raw.shape}")
 
     key, subkey = jr.split(key)
     X, mu, std, add_term = preprocess_data(X_raw, subkey)
     print(f"  Preprocessed shape: {X.shape}  |  add_term: {add_term:.4f}")
 
-    onp.savez("flow_weights/"+cfg.name + "_std.npz", mu=mu, std=std)
+    weights_dir = SNANA_DIR / "flow_weights"
+    weights_dir.mkdir(exist_ok=True)
+    onp.savez(str(weights_dir / (cfg.name + "_std.npz")), mu=mu, std=std)
 
     # ---- Model ----
     print("\nBuilding flow...")

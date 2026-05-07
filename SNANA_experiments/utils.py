@@ -2,6 +2,9 @@ import numpy as np
 import jax
 import jax.numpy as jnp
 from jax import jit
+from pathlib import Path
+
+SNANA_DIR = Path(__file__).resolve().parent
 
 # =========================
 # Constants
@@ -73,11 +76,11 @@ def minmax_unscale(X, mn, mx):
 
 def load_normalisation(name, std_norm=True):
     if std_norm:
-        f = np.load("flow_weights/"+ name + "_std.npz")
+        f = np.load(SNANA_DIR / "flow_weights" / (name + "_std.npz"))
         mu, std = f["mu"], f["std"]
         return dict(mu=mu, std=std, kind="std")
     else:
-        f = np.load("flow_weights/"+ name + "_minmax.npz")
+        f = np.load(SNANA_DIR / "flow_weights" / (name + "_minmax.npz"))
         mn, mx = f["min"], f["max"]
         return dict(min=mn, max=mx, kind="minmax")
 
