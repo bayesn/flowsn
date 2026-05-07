@@ -3,6 +3,7 @@
 
 import argparse
 import os
+import yaml
 from pathlib import Path
 
 import jax
@@ -41,16 +42,13 @@ def setup():
 
 def parse_args():
     parser = argparse.ArgumentParser()
-    parser.add_argument("--rep",       type=int,  default=0)
-    parser.add_argument("--name",      type=str,  default="paper")
-    parser.add_argument("--nn_width",  type=int,  default=32)
-    parser.add_argument("--nn_depth",  type=int,  default=2)
-    parser.add_argument("--no_flows",  type=int,  default=4)
-    parser.add_argument("--gamma",       action="store_true")
-    parser.add_argument("--cmb",       action="store_true")
-    parser.add_argument("--lcdm",       action="store_true")
-    parser.add_argument("--wa",       action="store_true")
-    parser.add_argument("--cosmo",  type=int,  default = 1)
+    parser.add_argument("--rep",    type=int, default=0)
+    parser.add_argument("--name",   type=str, default="paper")
+    parser.add_argument("--gamma",  action="store_true")
+    parser.add_argument("--cmb",    action="store_true")
+    parser.add_argument("--lcdm",   action="store_true")
+    parser.add_argument("--wa",     action="store_true")
+    parser.add_argument("--cosmo",  type=int, default=1)
     return parser.parse_args()
 
 
@@ -91,9 +89,13 @@ def main():
         key_cmb, _ = jr.split(jr.PRNGKey(args.rep))
         R_cmb_obs  = R_cmb_obs + float(jax.random.normal(key_cmb)) * SIGMA_RCMB
 
-    # --- Load flow + normalisation ---
+    # --- Load architecture + flow + normalisation ---
+    arch_path = SNANA_DIR / "flow_weights" / (args.name + "_arch.yml")
+    with open(arch_path) as f:
+        arch = yaml.safe_load(f)
+
     norm_params = load_normalisation(args.name, std_norm=STD_NORM)
-    flow        = load_flow(args.name, args.no_flows, args.nn_width, args.nn_depth)
+    flow        = load_flow(args.name, arch["no_flows"], arch["nn_width"], arch["nn_depth"])
 
     print(f"\nLoaded flow : {args.name}.eqx")
     print(f"JAX devices : {jax.devices()}")

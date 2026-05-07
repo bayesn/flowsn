@@ -56,6 +56,7 @@ python simple_model/train.py --data training_data --name sn_model --epochs 100
 **Outputs:**
 - `simple_model/scaling/<name>_std.npz` — standardisation statistics
 - `simple_model/weights/<name>.eqx` — trained model weights
+- `simple_model/weights/<name>_arch.yml` — architecture config (read automatically at inference)
 
 ---
 
@@ -111,9 +112,6 @@ python simple_model/inference.py --model_type flow --name sn_model --cmb --gamma
 | `--rep` | 0 | Random seed / realisation index |
 | `--name` | `base_name` | Model name; must match files saved in Step 2 |
 | `--model_type` | `flow` | `flow`, `analytical`, or `naive` |
-| `--nn_width` | 32 | Must match the trained model |
-| `--nn_depth` | 2 | Must match the trained model |
-| `--no_flows` | 4 | Must match the trained model |
 | `--lcdm` | off | Fit flat ΛCDM (Ω_de free) instead of wCDM |
 | `--cmb` | off | Add Gaussian prior on CMB shift parameter R |
 | `--wa` | off | Vary dark-energy w_a (uses jax-cosmo backend) |
@@ -222,6 +220,7 @@ python SNANA_experiments/SNANA_train.py \
 **Outputs:**
 - `SNANA_experiments/flow_weights/<name>.eqx` — trained model weights
 - `SNANA_experiments/flow_weights/<name>_std.npz` — standardisation statistics (`mu`, `std`)
+- `SNANA_experiments/flow_weights/<name>_arch.yml` — architecture config (read automatically at inference)
 
 ---
 
@@ -287,9 +286,6 @@ python SNANA_experiments/infer.py --name my_model --rep 0 --cosmo 2 --cmb --gamm
 | `--rep` | 0 | Test-set index (0–99) |
 | `--name` | `paper` | Model name; must match the files saved in Step 2 |
 | `--cosmo` | 1 | Cosmology ID (1, 2, or 3) |
-| `--nn_width` | 32 | Must match the trained model |
-| `--nn_depth` | 2 | Must match the trained model |
-| `--no_flows` | 4 | Must match the trained model |
 | `--cmb` | off | Add a Gaussian prior on the CMB shift parameter R |
 | `--lcdm` | off | Use flat ΛCDM (fit Ω_de) instead of wCDM (fit w) |
 | `--wa` | off | Vary the dark-energy equation-of-state evolution parameter w_a |

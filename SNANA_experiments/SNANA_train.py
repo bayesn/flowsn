@@ -1,6 +1,7 @@
 import argparse
 import pickle
 import copy
+import yaml
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -318,6 +319,8 @@ def main():
     weights_dir = SNANA_DIR / "flow_weights"
     weights_dir.mkdir(exist_ok=True)
     onp.savez(str(weights_dir / (cfg.name + "_std.npz")), mu=mu, std=std)
+    with open(weights_dir / (cfg.name + "_arch.yml"), "w") as f:
+        yaml.dump({"nn_width": cfg.nn_width, "nn_depth": cfg.nn_depth, "no_flows": cfg.no_flows}, f)
 
     # ---- Model ----
     print("\nBuilding flow...")

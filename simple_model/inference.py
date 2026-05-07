@@ -15,6 +15,7 @@ import numpyro
 
 numpyro.set_host_device_count(4)
 
+import yaml
 import equinox as eqx
 from flowjax.distributions import Normal
 from flowjax.flows import masked_autoregressive_flow
@@ -28,12 +29,9 @@ MODEL_DIR = Path(__file__).resolve().parent
 
 def main():
     parser = argparse.ArgumentParser()
-    parser.add_argument("--rep",        type=int,  default=0)
-    parser.add_argument("--name",       type=str,  default="base_name")
-    parser.add_argument("--nn_width",   type=int,  default=32)
-    parser.add_argument("--nn_depth",   type=int,  default=2)
-    parser.add_argument("--no_flows",   type=int,  default=4)
-    parser.add_argument("--model_type", type=str,  default="flow")
+    parser.add_argument("--rep",        type=int, default=0)
+    parser.add_argument("--name",       type=str, default="base_name")
+    parser.add_argument("--model_type", type=str, default="flow")
     parser.add_argument("--cmb",   action="store_true", help="CMB shift-parameter prior")
     parser.add_argument("--lcdm",  action="store_true", help="Flat LCDM (fit Omde instead of w)")
     parser.add_argument("--wa",    action="store_true", help="Vary dark-energy wa parameter")
@@ -64,6 +62,10 @@ def main():
     # --- Flow model setup ---
     flow_kwargs = {}
     if args.model_type == "flow":
+        arch_path = MODEL_DIR / "weights" / (args.name + "_arch.yml")
+        with open(arch_path) as f:
+            arch = yaml.safe_load(f)
+
         file_ = np.load(MODEL_DIR / "scaling" / (args.name + "_std.npz"))
         mu_, std_ = file_["mu"], file_["std"]
         add_ = jnp.sum(jnp.log(std_[:3]))
@@ -74,9 +76,9 @@ def main():
             base_dist=Normal(jnp.zeros(3)),
             cond_dim=15,
             nn_activation=jax.nn.gelu,
-            flow_layers=args.no_flows,
-            nn_width=args.nn_width,
-            nn_depth=args.nn_depth,
+            flow_layers=arch["no_flows"],
+            nn_width=arch["nn_width"],
+            nn_depth=arch["nn_depth"],
         )
         flow_model = eqx.tree_deserialise_leaves(
             str(MODEL_DIR / "weights" / (args.name + ".eqx")), skel_flow

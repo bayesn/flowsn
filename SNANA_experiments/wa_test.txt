@@ -1,7 +1,0 @@
-
-Loaded flow : paper.eqx
-JAX devices : [CudaDevice(id=0), CudaDevice(id=1), CudaDevice(id=2), CudaDevice(id=3)]
-==================================================
-  Run 0
-==================================================
-  Loaded test set 0: (1961, 16)
