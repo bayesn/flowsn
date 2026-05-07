@@ -150,7 +150,7 @@ def main():
     posterior = mcmc.get_samples()
     out_path  = f"{out_dir}/{prefix}_SNANA{args.rep}.npz"
     save_labels = list(posterior.keys())
-    save_labels.pop('eps')
+    save_labels.remove('eps')
     np.savez(out_path, **{k: posterior[k] for k in save_labels})
     print(f"  Saved -> {out_path}\n")
 
